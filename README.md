@@ -52,9 +52,9 @@ http://localhost:5000
 
 3. Seleccionar año y cargar estadísticas
 
-## Despliegue en Azure VM
+## Despliegue en Vercel
 
-Ver [DEPLOYMENT.md](DEPLOYMENT.md) para instrucciones detalladas de despliegue en Azure con GitHub Actions, nginx y SSL.
+El proyecto está desplegado en Vercel para un despliegue rápido y escalable de aplicaciones Python/Flask.
 
 ## Tecnologías
 
