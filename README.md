@@ -19,8 +19,8 @@ Herramienta de web scraping para obtener estadísticas y resultados de Once Cald
 
 1. Clonar el repositorio:
 ```bash
-git clone https://github.com/TU_USUARIO/scrappy.git
-cd scrappy
+git clone https://github.com/JLCervantes-19/ScrappyOncecaldas.git
+cd ScrappyOncecaldas
 ```
 
 2. Crear entorno virtual:

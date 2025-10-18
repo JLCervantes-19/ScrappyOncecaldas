@@ -429,16 +429,7 @@
                     <div class="number">${totalTablas || 0}</div>
                     <p style="font-size: 0.9em; margin-top: 10px; color: #666;">categorías</p>
                 </div>
-                <div class="stat-card">
-                    <h3>⚽ Goleadores</h3>
-                    <div class="number">${totalGoleadores}</div>
-                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">jugadores</p>
-                </div>
-                <div class="stat-card">
-                    <h3>🎯 Asistencias</h3>
-                    <div class="number">${totalAsistencias}</div>
-                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">jugadores</p>
-                </div>
+    
                 <div class="stat-card">
                     <h3>📅 Partidos</h3>
                     <div class="number">${totalResultados}</div>
@@ -575,8 +566,16 @@
 
                 const rowCount = renderTable(table, tableData);
 
-                if (title.includes('Goleador')) totalGoleadores = rowCount;
-                if (title.includes('Asistencia')) totalAsistencias = rowCount;
+                console.log(`Tabla: "${title}" - Filas: ${rowCount}`);
+
+                if (title.toLowerCase().includes('goleador')) {
+                    console.log('  -> Es tabla de goleadores');
+                    totalGoleadores = rowCount;
+                }
+                if (title.toLowerCase().includes('asistencia')) {
+                    console.log('  -> Es tabla de asistencias');
+                    totalAsistencias = rowCount;
+                }
 
                 estadisticasContainer.appendChild(section);
             });
@@ -598,6 +597,13 @@
             }
 
             generateInsights(estadisticas, resultados);
+
+            console.log('Metrics:', {
+                totalGoleadores,
+                totalAsistencias,
+                totalResultados,
+                totalTablas: estadisticas.length
+            });
 
             return {
                 totalGoleadores,
