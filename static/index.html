@@ -44,6 +44,30 @@
         .controls {
             text-align: center;
             margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .year-selector {
+            background: white;
+            color: #667eea;
+            border: 2px solid white;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .year-selector:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
 
         .btn {
@@ -242,10 +266,13 @@
     <div class="container">
         <div class="header">
             <h1>⚽ Once Caldas</h1>
-            <p>Estadísticas Temporada 2024 - Colombian Primera A</p>
+            <p id="headerSubtitle">Estadísticas Temporada - Colombian Primera A</p>
         </div>
 
         <div class="controls">
+            <select class="year-selector" id="yearSelector" onchange="onYearChange()">
+                <option value="">Seleccionar año...</option>
+            </select>
             <button class="btn" onclick="loadData()" id="loadBtn">
                 📊 Cargar Estadísticas
             </button>
@@ -263,49 +290,13 @@
 
         <div id="summary" class="stats-summary hidden"></div>
 
-        <div id="goleadores" class="section hidden">
-            <h2>🥇 Goleadores</h2>
-            <table id="goleadoresTable">
-                <thead>
-                    <tr>
-                        <th>Posición</th>
-                        <th>Jugador</th>
-                        <th>Partidos</th>
-                        <th>Goles</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+        <div id="insightsContainer" class="section hidden" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 30px; border-radius: 15px; margin-bottom: 30px;">
+            <h2 style="color: white;">💡 Insights para Apuestas</h2>
+            <div id="insightsContent"></div>
         </div>
 
-        <div id="asistencias" class="section hidden">
-            <h2>🎯 Asistencias</h2>
-            <table id="asistenciasTable">
-                <thead>
-                    <tr>
-                        <th>Posición</th>
-                        <th>Jugador</th>
-                        <th>Partidos</th>
-                        <th>Asistencias</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-
-        <div id="resultados" class="section hidden">
-            <h2>📅 Resultados</h2>
-            <table id="resultadosTable">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Partido</th>
-                        <th>Resultado</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        <div id="estadisticasContainer"></div>
+        <div id="resultadosContainer"></div>
     </div>
 
     <script>
@@ -345,8 +336,17 @@
         }
 
         function renderTable(tableElement, tableData) {
-            const thead = tableElement.querySelector("thead");
-            const tbody = tableElement.querySelector("tbody");
+            let thead = tableElement.querySelector("thead");
+            let tbody = tableElement.querySelector("tbody");
+
+            if (!thead) {
+                thead = document.createElement("thead");
+                tableElement.appendChild(thead);
+            }
+            if (!tbody) {
+                tbody = document.createElement("tbody");
+                tableElement.appendChild(tbody);
+            }
 
             if (!tableData || !Array.isArray(tableData.rows) || tableData.rows.length === 0) {
                 thead.innerHTML = "";
@@ -421,23 +421,73 @@
             return { headers, rows };
         }
 
-        function displaySummary({ totalGoleadores, totalAsistencias, totalResultados }) {
+        function displaySummary({ totalGoleadores, totalAsistencias, totalResultados, totalTablas }) {
             const summary = document.getElementById('summary');
             summary.innerHTML = `
                 <div class="stat-card">
+                    <h3>📊 Estadísticas</h3>
+                    <div class="number">${totalTablas || 0}</div>
+                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">categorías</p>
+                </div>
+                <div class="stat-card">
                     <h3>⚽ Goleadores</h3>
                     <div class="number">${totalGoleadores}</div>
+                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">jugadores</p>
                 </div>
                 <div class="stat-card">
                     <h3>🎯 Asistencias</h3>
                     <div class="number">${totalAsistencias}</div>
+                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">jugadores</p>
                 </div>
                 <div class="stat-card">
                     <h3>📅 Partidos</h3>
                     <div class="number">${totalResultados}</div>
+                    <p style="font-size: 0.9em; margin-top: 10px; color: #666;">registrados</p>
                 </div>
             `;
             summary.classList.remove('hidden');
+        }
+
+        let selectedYear = new Date().getFullYear();
+
+        async function loadAvailableYears() {
+            try {
+                const response = await fetch('/api/years');
+                const result = await response.json();
+
+                if (result.success) {
+                    const yearSelector = document.getElementById('yearSelector');
+                    yearSelector.innerHTML = '<option value="">Seleccionar año...</option>';
+
+                    result.years.reverse().forEach(year => {
+                        const option = document.createElement('option');
+                        option.value = year;
+                        option.textContent = year;
+                        if (year === result.current_year) {
+                            option.selected = true;
+                            selectedYear = year;
+                        }
+                        yearSelector.appendChild(option);
+                    });
+
+                    updateHeaderSubtitle(selectedYear);
+                }
+            } catch (e) {
+                console.error('Error cargando años:', e);
+            }
+        }
+
+        function onYearChange() {
+            const yearSelector = document.getElementById('yearSelector');
+            selectedYear = parseInt(yearSelector.value);
+            updateHeaderSubtitle(selectedYear);
+        }
+
+        function updateHeaderSubtitle(year) {
+            const subtitle = document.getElementById('headerSubtitle');
+            if (year) {
+                subtitle.textContent = `Estadísticas Temporada ${year} - Colombian Primera A`;
+            }
         }
 
         async function loadData() {
@@ -445,15 +495,20 @@
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
 
+            if (!selectedYear) {
+                showError('Por favor selecciona un año');
+                return;
+            }
+
             loadBtn.classList.add('loading');
             loadBtn.textContent = '⏳ Cargando...';
             loading.classList.remove('hidden');
             error.classList.add('hidden');
-            
+
             try {
-                const response = await fetch('/api/scrape');
+                const response = await fetch(`/api/scrape?year=${selectedYear}`);
                 const result = await response.json();
-                
+
                 if (result.success) {
                     const metrics = displayData(result.data);
                     displaySummary(metrics);
@@ -469,71 +524,132 @@
             }
         }
 
+        function getTableIcon(headers) {
+            const headersStr = headers.join(' ').toLowerCase();
+            if (headersStr.includes('gol') || headers.includes('G')) return '⚽';
+            if (headersStr.includes('asist') || headers.includes('A')) return '🎯';
+            if (headersStr.includes('tarjeta') || headersStr.includes('tj')) return '🟨';
+            if (headersStr.includes('falta')) return '⚠️';
+            if (headersStr.includes('tiro')) return '🎯';
+            return '📊';
+        }
+
+        function getTableTitle(table, index) {
+            if (table.title) return table.title;
+
+            const headers = table.headers || [];
+            if (headers.includes('G') && !headers.includes('A')) return 'Goleadores';
+            if (headers.includes('A')) return 'Asistencias';
+            if (headers.some(h => h.toLowerCase().includes('tarjeta'))) return 'Tarjetas';
+            if (headers.some(h => h.toLowerCase().includes('falta'))) return 'Faltas';
+
+            return `Estadística ${index + 1}`;
+        }
+
         function displayData(data) {
             const estadisticas = Array.isArray(data.estadisticas) ? data.estadisticas : [];
             const resultados = Array.isArray(data.resultados) ? data.resultados : [];
 
-            const goleadoresSection = document.getElementById('goleadores');
-            const asistenciasSection = document.getElementById('asistencias');
-            const resultadosSection = document.getElementById('resultados');
+            const estadisticasContainer = document.getElementById('estadisticasContainer');
+            const resultadosContainer = document.getElementById('resultadosContainer');
 
-            const goleadoresTableData = findTable(estadisticas, {
-                titleKeywords: ['goleador', 'goles'],
-                headerKeywords: ['gol'],
+            estadisticasContainer.innerHTML = '';
+            resultadosContainer.innerHTML = '';
+
+            let totalGoleadores = 0;
+            let totalAsistencias = 0;
+            let totalResultados = 0;
+
+            estadisticas.forEach((tableData, index) => {
+                const section = document.createElement('div');
+                section.className = 'section';
+
+                const title = getTableTitle(tableData, index);
+                const icon = getTableIcon(tableData.headers || []);
+
+                const table = document.createElement('table');
+                table.id = `statsTable${index}`;
+
+                section.innerHTML = `<h2>${icon} ${title}</h2>`;
+                section.appendChild(table);
+
+                const rowCount = renderTable(table, tableData);
+
+                if (title.includes('Goleador')) totalGoleadores = rowCount;
+                if (title.includes('Asistencia')) totalAsistencias = rowCount;
+
+                estadisticasContainer.appendChild(section);
             });
-            const asistenciasTableData = findTable(estadisticas, {
-                titleKeywords: ['asist'],
-                headerKeywords: ['asist'],
-            });
-            const resultadosTableData = combineResultsTables(resultados);
 
-            const totalGoleadores = renderTable(
-                document.getElementById('goleadoresTable'),
-                goleadoresTableData
-            );
-            const totalAsistencias = renderTable(
-                document.getElementById('asistenciasTable'),
-                asistenciasTableData
-            );
-            const totalResultados = renderTable(
-                document.getElementById('resultadosTable'),
-                resultadosTableData
-            );
+            if (resultados.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'section';
 
-            if (goleadoresTableData) {
-                goleadoresSection.classList.remove('hidden');
-                goleadoresSection.querySelector('h2').textContent =
-                    goleadoresTableData.title?.trim() || '🥇 Goleadores';
-            } else {
-                goleadoresSection.classList.remove('hidden');
-                goleadoresSection.querySelector('h2').textContent = '🥇 Goleadores';
+                const table = document.createElement('table');
+                table.id = 'resultadosTable';
+
+                section.innerHTML = '<h2>📅 Resultados</h2>';
+                section.appendChild(table);
+
+                const resultadosTableData = combineResultsTables(resultados);
+                totalResultados = renderTable(table, resultadosTableData);
+
+                resultadosContainer.appendChild(section);
             }
 
-            if (asistenciasTableData) {
-                asistenciasSection.classList.remove('hidden');
-                asistenciasSection.querySelector('h2').textContent =
-                    asistenciasTableData.title?.trim() || '🎯 Asistencias';
-            } else {
-                asistenciasSection.classList.remove('hidden');
-                asistenciasSection.querySelector('h2').textContent = '🎯 Asistencias';
-            }
-
-            if (resultadosTableData.rows.length > 0) {
-                resultadosSection.classList.remove('hidden');
-                resultadosSection.querySelector('h2').textContent =
-                    resultadosTableData.rows.length > 0
-                        ? '📅 Resultados'
-                        : '📅 Resultados';
-            } else {
-                resultadosSection.classList.remove('hidden');
-                resultadosSection.querySelector('h2').textContent = '📅 Resultados';
-            }
+            generateInsights(estadisticas, resultados);
 
             return {
                 totalGoleadores,
                 totalAsistencias,
                 totalResultados,
+                totalTablas: estadisticas.length
             };
+        }
+
+        function generateInsights(estadisticas, resultados) {
+            const insightsContainer = document.getElementById('insightsContainer');
+            const insightsContent = document.getElementById('insightsContent');
+
+            const insights = [];
+
+            const goleadoresTable = estadisticas.find(t => t.headers && t.headers.includes('G'));
+            if (goleadoresTable && goleadoresTable.rows.length > 0) {
+                const topScorer = goleadoresTable.rows[0];
+                if (topScorer.length >= 4) {
+                    const nombre = topScorer[1];
+                    const goles = topScorer[3];
+                    insights.push(`⚽ <strong>${nombre}</strong> lidera la tabla de goleadores con <strong>${goles} goles</strong>`);
+                }
+            }
+
+            const asistenciasTable = estadisticas.find(t => t.headers && t.headers.includes('A'));
+            if (asistenciasTable && asistenciasTable.rows.length > 0) {
+                const topAssist = asistenciasTable.rows[0];
+                if (topAssist.length >= 4) {
+                    const nombre = topAssist[1];
+                    const asistencias = topAssist[3];
+                    insights.push(`🎯 <strong>${nombre}</strong> lidera en asistencias con <strong>${asistencias}</strong>`);
+                }
+            }
+
+            if (resultados.length > 0) {
+                const allResults = resultados.flatMap(t => t.rows || []);
+                const wins = allResults.filter(r => {
+                    const result = r.join(' ');
+                    return result.includes('Once Caldas') && (result.match(/(\d+)\s*-\s*(\d+)/)?.[1] > result.match(/(\d+)\s*-\s*(\d+)/)?.[2]);
+                }).length;
+
+                if (allResults.length > 0) {
+                    const winRate = ((wins / allResults.length) * 100).toFixed(1);
+                    insights.push(`📊 Efectividad: <strong>${wins} victorias</strong> de <strong>${allResults.length} partidos</strong> (<strong>${winRate}%</strong>)`);
+                }
+            }
+
+            if (insights.length > 0) {
+                insightsContent.innerHTML = insights.map(i => `<p style="margin: 10px 0; font-size: 1.1em;">• ${i}</p>`).join('');
+                insightsContainer.classList.remove('hidden');
+            }
         }
 
         function showError(message) {
@@ -548,11 +664,16 @@
                 return;
             }
 
+            if (!selectedYear) {
+                showError('Por favor selecciona un año');
+                return;
+            }
+
             exportBtn.classList.add('loading');
             exportBtn.textContent = '⏳ Exportando...';
 
             try {
-                const response = await fetch('/api/export/csv');
+                const response = await fetch(`/api/export/csv?year=${selectedYear}`);
 
                 if (!response.ok) {
                     throw new Error(`El servidor respondió con ${response.status}`);
@@ -582,6 +703,10 @@
                 exportBtn.textContent = '💾 Exportar CSV';
             }
         }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAvailableYears();
+        });
     </script>
 </body>
 </html>

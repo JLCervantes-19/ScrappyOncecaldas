@@ -1,0 +1,64 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AZURE_SSH_KEY }}" > ~/.ssh/azure_key
+          chmod 600 ~/.ssh/azure_key
+          ssh-keyscan -H ${{ secrets.AZURE_VM_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Azure VM
+        run: |
+          ssh -i ~/.ssh/azure_key ${{ secrets.AZURE_VM_USER }}@${{ secrets.AZURE_VM_HOST }} << 'ENDSSH'
+            set -e
+
+            # Navigate to project directory
+            cd ~/scrappy || { echo "Project directory not found"; exit 1; }
+
+            # Pull latest changes
+            git pull origin main
+
+            # Activate virtual environment
+            source venv/bin/activate
+
+            # Install/update dependencies
+            pip install -r requirements.txt
+
+            # Restart the application service
+            sudo systemctl restart scrappy
+
+            # Check service status
+            sudo systemctl status scrappy --no-pager
+
+            echo "Deployment completed successfully!"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.DOMAIN_NAME }}/api/scrape)
+          if [ $response -eq 200 ]; then
+            echo "Deployment verified successfully!"
+          else
+            echo "Deployment verification failed with status code: $response"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/azure_key

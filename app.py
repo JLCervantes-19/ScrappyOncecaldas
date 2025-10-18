@@ -8,7 +8,7 @@ import zipfile
 from datetime import datetime
 from typing import Iterable
 
-from flask import Flask, jsonify, send_file, send_from_directory
+from flask import Flask, jsonify, send_file, send_from_directory, request
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -17,8 +17,9 @@ import unicodedata
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 CORS(app)
 
-STATISTICS_URL = "https://www.espn.com.co/futbol/equipo/estadisticas/_/id/2919/liga/COL.1/temporada/2024"
-RESULTS_URL = "https://www.espn.com.co/futbol/equipo/resultados/_/id/2919/temporada/2024"
+STATISTICS_URL_TEMPLATE = "https://www.espn.com.co/futbol/equipo/estadisticas/_/id/2919/liga/COL.1/temporada/{year}"
+RESULTS_URL_TEMPLATE = "https://www.espn.com.co/futbol/equipo/resultados/_/id/2919/temporada/{year}"
+
 REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -28,6 +29,8 @@ REQUEST_HEADERS = {
     "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
 }
 REQUEST_PROXIES = {"http": None, "https": None}
+
+AVAILABLE_YEARS = list(range(2015, datetime.now().year + 1))
 
 
 def fetch_soup(url: str) -> BeautifulSoup:
@@ -153,16 +156,29 @@ def extract_tables_from_page(url: str, selectors: list[str]) -> list[dict]:
     return tables_data
 
 
-def scrape_once_caldas() -> dict:
-    """Scrape statistics and results tables for Once Caldas."""
+def scrape_once_caldas(year: int = None) -> dict:
+    """Scrape statistics and results tables for Once Caldas for a specific year."""
+    if year is None:
+        year = datetime.now().year
+
+    if year not in AVAILABLE_YEARS:
+        raise ValueError(f"Año {year} no disponible. Años válidos: {min(AVAILABLE_YEARS)}-{max(AVAILABLE_YEARS)}")
+
+    statistics_url = STATISTICS_URL_TEMPLATE.format(year=year)
+    results_url = RESULTS_URL_TEMPLATE.format(year=year)
+
     statistics_tables = extract_tables_from_page(
-        STATISTICS_URL, ["div.ResponsiveTable"]
+        statistics_url, ["div.ResponsiveTable", "div.Table__Scroller", "section"]
     )
     results_tables = extract_tables_from_page(
-        RESULTS_URL, ["div.ResponsiveTable.Table__results"]
+        results_url, ["div.ResponsiveTable.Table__results", "div.ResponsiveTable", "section"]
     )
 
-    return {"estadisticas": statistics_tables, "resultados": results_tables}
+    return {
+        "estadisticas": statistics_tables,
+        "resultados": results_tables,
+        "temporada": year
+    }
 
 
 @app.route("/")
@@ -171,19 +187,36 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.route("/api/years", methods=["GET"])
+def api_years():
+    """Return available years for querying."""
+    return jsonify(
+        {
+            "success": True,
+            "years": AVAILABLE_YEARS,
+            "current_year": datetime.now().year
+        }
+    )
+
+
 @app.route("/api/scrape", methods=["GET"])
 def api_scrape():
     try:
-        data = scrape_once_caldas()
+        year = request.args.get("year", default=datetime.now().year, type=int)
+
+        data = scrape_once_caldas(year)
         return jsonify(
             {
                 "success": True,
                 "data": data,
+                "temporada": year,
                 "total_tablas_estadisticas": len(data.get("estadisticas", [])),
                 "total_tablas_resultados": len(data.get("resultados", [])),
             }
         )
-    except requests.HTTPError as exc:  # pragma: no cover - defensive path
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except requests.HTTPError as exc:
         return (
             jsonify(
                 {
@@ -193,7 +226,7 @@ def api_scrape():
             ),
             502,
         )
-    except requests.RequestException as exc:  # pragma: no cover - defensive path
+    except requests.RequestException as exc:
         return (
             jsonify(
                 {
@@ -203,14 +236,16 @@ def api_scrape():
             ),
             502,
         )
-    except Exception as exc:  # pragma: no cover - defensive path
+    except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
 @app.route("/api/export/csv", methods=["GET"])
 def export_csv():
     try:
-        data = scrape_once_caldas()
+        year = request.args.get("year", default=datetime.now().year, type=int)
+
+        data = scrape_once_caldas(year)
         buffer = io.BytesIO()
 
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
@@ -219,7 +254,7 @@ def export_csv():
 
         buffer.seek(0)
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        filename = f"once_caldas_{timestamp}.zip"
+        filename = f"once_caldas_{year}_{timestamp}.zip"
 
         return send_file(
             buffer,
@@ -227,7 +262,9 @@ def export_csv():
             as_attachment=True,
             download_name=filename,
         )
-    except Exception as exc:  # pragma: no cover - defensive path
+    except ValueError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
